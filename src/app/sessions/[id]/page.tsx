@@ -50,10 +50,22 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
     if (!session?.messages) return [];
     if (!groupMessages) return session.messages;
 
-    const grouped: SessionMessageDisplay[] = [];
+    const grouped: (SessionMessageDisplay & { cacheReadDelta?: number; showCacheRead?: boolean })[] = [];
+    let lastCacheRead = 0;
+
     session.messages.forEach((msg) => {
       const lastMsg = grouped.length > 0 ? grouped[grouped.length - 1] : null;
       const isSameRequest = lastMsg && msg.requestId && lastMsg.requestId === msg.requestId && msg.role === 'assistant' && lastMsg.role === 'assistant';
+
+      const cacheRead = msg.usage?.cache_read_input_tokens || 0;
+      let cacheReadDelta = 0;
+      let showCacheRead = false;
+
+      if (cacheRead > 0 && cacheRead > lastCacheRead) {
+        cacheReadDelta = lastCacheRead > 0 ? cacheRead - lastCacheRead : 0;
+        showCacheRead = true;
+        lastCacheRead = cacheRead;
+      }
 
       if (isSameRequest) {
         if (msg.content) {
@@ -71,13 +83,15 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
         }
         if (msg.usage) {
           lastMsg.usage = msg.usage;
+          lastMsg.cacheReadDelta = cacheReadDelta || lastMsg.cacheReadDelta;
+          lastMsg.showCacheRead = showCacheRead || lastMsg.showCacheRead;
         }
       } else {
-        grouped.push({ ...msg });
+        grouped.push({ ...msg, cacheReadDelta, showCacheRead });
       }
     });
     return grouped;
-  }, [session?.messages, groupMessages]);
+  }, [session, groupMessages]);
 
   if (isLoading || !session || !session.id) {
     return (
@@ -206,20 +220,12 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
             </CardHeader>
             <CardContent className="pt-0 max-h-[calc(100vh-280px)] overflow-y-auto">
               <div className="space-y-4">
-                {(() => {
-                  let lastCacheRead = 0;
-                  return displayMessages.map((msg, i) => {
-                    const cacheRead = msg.usage?.cache_read_input_tokens || 0;
-                    let cacheReadDelta = 0;
-                    let showCacheRead = false;
-
-                    if (cacheRead > 0 && cacheRead > lastCacheRead) {
-                      cacheReadDelta = lastCacheRead > 0 ? cacheRead - lastCacheRead : 0;
-                      showCacheRead = true;
-                      lastCacheRead = cacheRead;
-                    }
-
-                    const cacheWrite = msg.usage?.cache_creation_input_tokens || 0;
+                {displayMessages.map((msg, i) => {
+                  const m = msg as (SessionMessageDisplay & { cacheReadDelta?: number; showCacheRead?: boolean });
+                  const cacheRead = m.usage?.cache_read_input_tokens || 0;
+                  const cacheReadDelta = m.cacheReadDelta || 0;
+                  const showCacheRead = m.showCacheRead || false;
+                  const cacheWrite = msg.usage?.cache_creation_input_tokens || 0;
 
                     return (
                       <div key={i} className="flex gap-3">
@@ -314,8 +320,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                         </div>
                       </div>
                     );
-                  });
-                })()}
+                  })}
               </div>
             </CardContent>
           </Card>
@@ -439,7 +444,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
       {/* JSON Viewer Modal */}
       {selectedJson && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="flex h-full max-h-[80vh] w-full max-w-3xl flex-col rounded-lg border border-border bg-card shadow-2xl">
+          <div className="flex h-auto max-h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-border bg-card shadow-2xl">
             <div className="flex items-center justify-between border-b border-border p-4">
               <h3 className="text-sm font-semibold">Message JSON</h3>
               <button
@@ -449,10 +454,12 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <ScrollArea className="flex-1 p-4">
-              <pre className="text-xs font-mono leading-relaxed whitespace-pre-wrap break-words">
-                {JSON.stringify(selectedJson, null, 2)}
-              </pre>
+            <ScrollArea className="flex-1 min-h-0 overflow-y-scroll">
+              <div className="p-4">
+                <pre className="text-xs font-mono leading-relaxed whitespace-pre-wrap break-words">
+                  {JSON.stringify(selectedJson, null, 2)}
+                </pre>
+              </div>
             </ScrollArea>
           </div>
         </div>
