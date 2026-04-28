@@ -376,7 +376,7 @@ export async function getSessionDetail(sessionId: string): Promise<SessionDetail
         }
         if (msg.type === 'assistant' && msg.message?.content) {
           const content = msg.message.content;
-          const toolCalls: { name: string; id: string }[] = [];
+          const toolCalls: { name: string; id: string; input?: unknown }[] = [];
           let text = '';
           if (Array.isArray(content)) {
             for (const c of content) {
@@ -385,7 +385,11 @@ export async function getSessionDetail(sessionId: string): Promise<SessionDetail
                   text += (c.text as string) + '\n';
                 }
                 if ('type' in c && c.type === 'tool_use' && 'name' in c) {
-                  toolCalls.push({ name: c.name as string, id: (c.id as string) || '' });
+                  toolCalls.push({ 
+                    name: c.name as string, 
+                    id: (c.id as string) || '',
+                    input: 'input' in c ? c.input : undefined
+                  });
                 }
               }
             }

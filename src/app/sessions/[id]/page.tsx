@@ -1,6 +1,6 @@
 'use client';
 
-import { use } from 'react';
+import { use, useState } from 'react';
 import { useSessionDetail } from '@/lib/hooks';
 import { useCostMode } from '@/lib/cost-mode-context';
 import { formatCost, formatDuration, formatTokens } from '@/lib/format';
@@ -9,10 +9,32 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import {
   ArrowLeft, Clock, GitBranch, MessageSquare, Wrench,
-  User, Bot, Coins, Activity, Minimize2
+  User, Bot, Coins, Activity, Minimize2, ChevronDown, ChevronRight
 } from 'lucide-react';
 import Link from 'next/link';
 import { format } from 'date-fns';
+
+function ToolCall({ tool }: { tool: { name: string; id: string; input?: unknown } }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div className="mt-1 flex flex-col items-start">
+      <button 
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center gap-1.5 rounded border border-border bg-background px-2 py-0.5 text-[10px] font-mono hover:bg-accent transition-colors"
+      >
+        <Wrench className="h-3 w-3 text-muted-foreground" />
+        <span>{tool.name}</span>
+        {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+      </button>
+      {isExpanded && tool.input !== undefined && (
+        <pre className="mt-1 w-full p-2 bg-muted/50 rounded text-[10px] overflow-x-auto font-mono border border-border/30">
+          {JSON.stringify(tool.input, null, 2)}
+        </pre>
+      )}
+    </div>
+  );
+}
 
 export default function SessionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -129,7 +151,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold">Conversation</CardTitle>
             </CardHeader>
-            <CardContent className="pt-0 max-h-[600px] overflow-y-auto">
+            <CardContent className="pt-0 max-h-[calc(100vh-280px)] overflow-y-auto">
               <div className="space-y-4">
                 {messages.map((msg, i) => (
                   <div key={i} className="flex gap-3">
@@ -164,12 +186,32 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                       <div className="text-sm text-foreground/90 whitespace-pre-wrap break-words leading-relaxed">
                         {msg.content.length > 500 ? msg.content.slice(0, 500) + '...' : msg.content}
                       </div>
+
+                      {msg.usage && (
+                        <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1">
+                            <span className="font-semibold text-foreground/70">In:</span> {formatTokens(msg.usage.input_tokens)}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="font-semibold text-foreground/70">Out:</span> {formatTokens(msg.usage.output_tokens)}
+                          </div>
+                          {(msg.usage.cache_read_input_tokens || 0) > 0 && (
+                            <div className="flex items-center gap-1 text-amber-700">
+                              <span className="font-semibold">Cache Read:</span> {formatTokens(msg.usage.cache_read_input_tokens)}
+                            </div>
+                          )}
+                          {(msg.usage.cache_creation_input_tokens || 0) > 0 && (
+                            <div className="flex items-center gap-1 text-sky-700">
+                              <span className="font-semibold">Cache Write:</span> {formatTokens(msg.usage.cache_creation_input_tokens)}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {msg.toolCalls && msg.toolCalls.length > 0 && (
-                        <div className="mt-1.5 flex flex-wrap gap-1">
+                        <div className="mt-2 space-y-1">
                           {msg.toolCalls.map((tool, j) => (
-                            <Badge key={j} variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
-                              {tool.name}
-                            </Badge>
+                            <ToolCall key={j} tool={tool} />
                           ))}
                         </div>
                       )}

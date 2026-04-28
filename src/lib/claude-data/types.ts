@@ -164,7 +164,7 @@ export interface SessionMessageDisplay {
   timestamp: string;
   model?: string;
   usage?: TokenUsage;
-  toolCalls?: { name: string; id: string }[];
+  toolCalls?: { name: string; id: string; input?: unknown }[];
 }
 
 export interface DashboardStats {
