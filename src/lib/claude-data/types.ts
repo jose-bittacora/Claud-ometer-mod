@@ -160,6 +160,7 @@ export interface SessionDetail extends SessionInfo {
 
 export interface SessionMessageDisplay {
   role: 'user' | 'assistant';
+  type?: string;
   content: string;
   timestamp: string;
   model?: string;

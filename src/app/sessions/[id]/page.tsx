@@ -3,16 +3,19 @@
 import { use, useState } from 'react';
 import { useSessionDetail } from '@/lib/hooks';
 import { useCostMode } from '@/lib/cost-mode-context';
+import { SessionMessageDisplay } from '@/lib/claude-data/types';
 import { formatCost, formatDuration, formatTokens } from '@/lib/format';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import {
   ArrowLeft, Clock, GitBranch, MessageSquare, Wrench,
-  User, Bot, Coins, Activity, Minimize2, ChevronDown, ChevronRight
+  User, Bot, Coins, Activity, Minimize2, ChevronDown, ChevronRight,
+  TrendingUp, Eye, X
 } from 'lucide-react';
 import Link from 'next/link';
 import { format } from 'date-fns';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 function ToolCall({ tool }: { tool: { name: string; id: string; input?: unknown } }) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -40,6 +43,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
   const { id } = use(params);
   const { data: session, isLoading, error } = useSessionDetail(id);
   const { pickCost } = useCostMode();
+  const [selectedJson, setSelectedJson] = useState<SessionMessageDisplay | null>(null);
 
   if (isLoading || !session || !session.id) {
     return (
@@ -153,71 +157,106 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
             </CardHeader>
             <CardContent className="pt-0 max-h-[calc(100vh-280px)] overflow-y-auto">
               <div className="space-y-4">
-                {messages.map((msg, i) => (
-                  <div key={i} className="flex gap-3">
-                    <div className={`mt-0.5 flex-shrink-0 rounded-lg p-1.5 ${
-                      msg.role === 'user' ? 'bg-primary/10' : 'bg-muted'
-                    }`}>
-                      {msg.role === 'user' ? (
-                        <User className="h-3.5 w-3.5 text-primary" />
-                      ) : (
-                        <Bot className="h-3.5 w-3.5 text-muted-foreground" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-medium">
-                          {msg.role === 'user' ? 'You' : 'Claude'}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground">
-                          {format(new Date(msg.timestamp), 'h:mm:ss a')}
-                        </span>
-                        {msg.model && (
-                          <Badge variant="secondary" className="text-[9px] px-1 py-0">
-                            {msg.model.includes('opus') ? 'Opus' : msg.model.includes('sonnet') ? 'Sonnet' : 'Haiku'}
-                          </Badge>
-                        )}
-                        {msg.usage && (
-                          <span className="text-[9px] text-muted-foreground">
-                            {formatTokens((msg.usage.input_tokens || 0) + (msg.usage.output_tokens || 0))} tokens
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-sm text-foreground/90 whitespace-pre-wrap break-words leading-relaxed">
-                        {msg.content.length > 500 ? msg.content.slice(0, 500) + '...' : msg.content}
-                      </div>
+                {(() => {
+                  let lastCacheRead = 0;
+                  return messages.map((msg, i) => {
+                    const cacheRead = msg.usage?.cache_read_input_tokens || 0;
+                    let cacheReadDelta = 0;
+                    let showCacheRead = false;
 
-                      {msg.usage && (
-                        <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-                          <div className="flex items-center gap-1">
-                            <span className="font-semibold text-foreground/70">In:</span> {formatTokens(msg.usage.input_tokens)}
+                    if (cacheRead > 0 && cacheRead > lastCacheRead) {
+                      cacheReadDelta = lastCacheRead > 0 ? cacheRead - lastCacheRead : 0;
+                      showCacheRead = true;
+                      lastCacheRead = cacheRead;
+                    }
+
+                    const cacheWrite = msg.usage?.cache_creation_input_tokens || 0;
+
+                    return (
+                      <div key={i} className="flex gap-3">
+                        <div className={`mt-0.5 flex-shrink-0 rounded-lg p-1.5 ${
+                          msg.role === 'user' ? 'bg-primary/10' : 'bg-muted'
+                        }`}>
+                          {msg.role === 'user' ? (
+                            <User className="h-3.5 w-3.5 text-primary" />
+                          ) : (
+                            <Bot className="h-3.5 w-3.5 text-muted-foreground" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs font-medium">
+                              {msg.role === 'user' ? 'You' : 'Claude'}
+                            </span>
+                            {msg.type && msg.type !== msg.role && (
+                              <Badge variant="outline" className="text-[9px] px-1 py-0 uppercase tracking-tight font-semibold bg-muted/50 text-muted-foreground">
+                                {msg.type}
+                              </Badge>
+                            )}
+                            <span className="text-[10px] text-muted-foreground">
+                              {format(new Date(msg.timestamp), 'h:mm:ss a')}
+                            </span>
+                            {msg.model && (
+                              <Badge variant="secondary" className="text-[9px] px-1 py-0">
+                                {msg.model.includes('opus') ? 'Opus' : msg.model.includes('sonnet') ? 'Sonnet' : 'Haiku'}
+                              </Badge>
+                            )}
+                            {msg.usage && (
+                              <span className="text-[9px] text-muted-foreground">
+                                {formatTokens((msg.usage.input_tokens || 0) + (msg.usage.output_tokens || 0))} tokens
+                              </span>
+                            )}
+                            <button
+                              onClick={() => setSelectedJson(msg)}
+                              className="ml-auto rounded-md p-1 hover:bg-muted text-muted-foreground transition-colors"
+                              title="View message JSON"
+                            >
+                              <Eye className="h-3 w-3" />
+                            </button>
                           </div>
-                          <div className="flex items-center gap-1">
-                            <span className="font-semibold text-foreground/70">Out:</span> {formatTokens(msg.usage.output_tokens)}
+                          <div className="text-sm text-foreground/90 whitespace-pre-wrap break-words leading-relaxed">
+                            {msg.content.length > 500 ? msg.content.slice(0, 500) + '...' : msg.content}
                           </div>
-                          {(msg.usage.cache_read_input_tokens || 0) > 0 && (
-                            <div className="flex items-center gap-1 text-amber-700">
-                              <span className="font-semibold">Cache Read:</span> {formatTokens(msg.usage.cache_read_input_tokens)}
+
+                          {msg.usage && (
+                            <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
+                              <div className="flex items-center gap-1">
+                                <span className="font-semibold text-foreground/70">In:</span> {formatTokens(msg.usage.input_tokens)}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="font-semibold text-foreground/70">Out:</span> {formatTokens(msg.usage.output_tokens)}
+                              </div>
+                              {showCacheRead && (
+                                <div className="flex items-center gap-1 text-amber-700">
+                                  <span className="font-semibold">Cache Read:</span> {formatTokens(cacheRead)}
+                                  {cacheReadDelta > 0 && (
+                                    <>
+                                      <TrendingUp className="h-3 w-3 ml-0.5" />
+                                      <span className="font-medium">{formatTokens(cacheReadDelta)}</span>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                              {cacheWrite > 0 && (
+                                <div className="flex items-center gap-1 text-sky-700">
+                                  <span className="font-semibold">Cache Write:</span> {formatTokens(cacheWrite)}
+                                </div>
+                              )}
                             </div>
                           )}
-                          {(msg.usage.cache_creation_input_tokens || 0) > 0 && (
-                            <div className="flex items-center gap-1 text-sky-700">
-                              <span className="font-semibold">Cache Write:</span> {formatTokens(msg.usage.cache_creation_input_tokens)}
+
+                          {msg.toolCalls && msg.toolCalls.length > 0 && (
+                            <div className="mt-2 space-y-1">
+                              {msg.toolCalls.map((tool, j) => (
+                                <ToolCall key={j} tool={tool} />
+                              ))}
                             </div>
                           )}
                         </div>
-                      )}
-
-                      {msg.toolCalls && msg.toolCalls.length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          {msg.toolCalls.map((tool, j) => (
-                            <ToolCall key={j} tool={tool} />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </CardContent>
           </Card>
@@ -337,6 +376,28 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
           </Card>
         </div>
       </div>
+
+      {/* JSON Viewer Modal */}
+      {selectedJson && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="flex h-full max-h-[80vh] w-full max-w-3xl flex-col rounded-lg border border-border bg-card shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border p-4">
+              <h3 className="text-sm font-semibold">Message JSON</h3>
+              <button
+                onClick={() => setSelectedJson(null)}
+                className="rounded-md p-1 hover:bg-muted text-muted-foreground transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <ScrollArea className="flex-1 p-4">
+              <pre className="text-xs font-mono leading-relaxed whitespace-pre-wrap break-words">
+                {JSON.stringify(selectedJson, null, 2)}
+              </pre>
+            </ScrollArea>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

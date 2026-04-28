@@ -369,6 +369,7 @@ export async function getSessionDetail(sessionId: string): Promise<SessionDetail
           if (text && !text.startsWith('[Tool Result]')) {
             messages.push({
               role: 'user',
+              type: msg.type,
               content: text,
               timestamp: msg.timestamp,
             });
@@ -397,6 +398,7 @@ export async function getSessionDetail(sessionId: string): Promise<SessionDetail
           if (text.trim() || toolCalls.length > 0) {
             messages.push({
               role: 'assistant',
+              type: msg.data?.type || msg.type,
               content: text.trim() || `[Used ${toolCalls.length} tool(s): ${toolCalls.map(t => t.name).join(', ')}]`,
               timestamp: msg.timestamp,
               model: msg.message.model,
@@ -404,6 +406,13 @@ export async function getSessionDetail(sessionId: string): Promise<SessionDetail
               toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
             });
           }
+        } else if (msg.type === 'progress' || msg.type === 'system') {
+          messages.push({
+            role: 'assistant',
+            type: msg.data?.type || msg.type,
+            content: msg.data?.statusMessage || (msg.type === 'system' ? 'System message' : 'Processing...'),
+            timestamp: msg.timestamp,
+          });
         }
       } catch { /* skip */ }
     }
