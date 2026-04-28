@@ -1,6 +1,7 @@
 'use client';
 
-import { use, useState, useMemo } from 'react';
+import { use, useState, useMemo, useEffect } from 'react';
+import useSWR from 'swr';
 import { useSessionDetail } from '@/lib/hooks';
 import { useCostMode } from '@/lib/cost-mode-context';
 import { SessionMessageDisplay } from '@/lib/claude-data/types';
@@ -16,6 +17,50 @@ import {
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
+import json from 'react-syntax-highlighter/dist/esm/languages/prism/json';
+import oneDark from 'react-syntax-highlighter/dist/esm/styles/prism/one-dark';
+
+SyntaxHighlighter.registerLanguage('json', json);
+
+const customCodeStyle: { [key: string]: React.CSSProperties } = {
+  'code[class*="language-"]': {
+    color: '#abb2bf',
+    background: 'none',
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+    fontSize: '12px',
+    textAlign: 'left',
+    whiteSpace: 'pre',
+    wordSpacing: 'normal',
+    wordBreak: 'normal',
+    wordWrap: 'normal',
+    lineHeight: '1.5',
+    tabSize: 2,
+    hyphens: 'none',
+  },
+  'pre[class*="language-"]': {
+    color: '#abb2bf',
+    background: 'transparent',
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+    fontSize: '12px',
+    textAlign: 'left',
+    whiteSpace: 'pre',
+    wordSpacing: 'normal',
+    wordBreak: 'normal',
+    wordWrap: 'normal',
+    lineHeight: '1.5',
+    tabSize: 2,
+    hyphens: 'none',
+    padding: '0',
+    margin: '0',
+    overflow: 'auto',
+  },
+  '.token.property': { color: '#e06c75' },
+  '.token.string': { color: '#98c379' },
+  '.token.number': { color: '#d19a66' },
+  '.token.boolean': { color: '#56b6c2' },
+  '.token.punctuation': { color: '#abb2bf' },
+};
 
 function ToolCall({ tool }: { tool: { name: string; id: string; input?: unknown } }) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -455,10 +500,14 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
               </button>
             </div>
             <ScrollArea className="flex-1 min-h-0 overflow-y-scroll">
-              <div className="p-4">
-                <pre className="text-xs font-mono leading-relaxed whitespace-pre-wrap break-words">
+              <div className="p-4 text-xs">
+                <SyntaxHighlighter
+                  language="json"
+                  style={oneDark}
+                  customStyle={customCodeStyle}
+                >
                   {JSON.stringify(selectedJson, null, 2)}
-                </pre>
+                </SyntaxHighlighter>
               </div>
             </ScrollArea>
           </div>
