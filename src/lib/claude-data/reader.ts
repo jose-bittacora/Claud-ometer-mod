@@ -395,6 +395,7 @@ export async function getSessionDetail(sessionId: string): Promise<SessionDetail
               }
             }
           }
+
           if (text.trim() || toolCalls.length > 0) {
             messages.push({
               role: 'assistant',
@@ -402,6 +403,8 @@ export async function getSessionDetail(sessionId: string): Promise<SessionDetail
               content: text.trim() || `[Used ${toolCalls.length} tool(s): ${toolCalls.map(t => t.name).join(', ')}]`,
               timestamp: msg.timestamp,
               model: msg.message.model,
+              requestId: msg.requestId,
+              messageId: msg.message.id,
               usage: msg.message.usage as TokenUsage | undefined,
               toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
             });

@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useState, useMemo } from 'react';
 import { useSessionDetail } from '@/lib/hooks';
 import { useCostMode } from '@/lib/cost-mode-context';
 import { SessionMessageDisplay } from '@/lib/claude-data/types';
@@ -11,7 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import {
   ArrowLeft, Clock, GitBranch, MessageSquare, Wrench,
   User, Bot, Coins, Activity, Minimize2, ChevronDown, ChevronRight,
-  TrendingUp, Eye, X
+  TrendingUp, Eye, X, Layers
 } from 'lucide-react';
 import Link from 'next/link';
 import { format } from 'date-fns';
@@ -44,6 +44,40 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
   const { data: session, isLoading, error } = useSessionDetail(id);
   const { pickCost } = useCostMode();
   const [selectedJson, setSelectedJson] = useState<SessionMessageDisplay | null>(null);
+  const [groupMessages, setGroupMessages] = useState(true);
+
+  const displayMessages = useMemo(() => {
+    if (!session?.messages) return [];
+    if (!groupMessages) return session.messages;
+
+    const grouped: SessionMessageDisplay[] = [];
+    session.messages.forEach((msg) => {
+      const lastMsg = grouped.length > 0 ? grouped[grouped.length - 1] : null;
+      const isSameRequest = lastMsg && msg.requestId && lastMsg.requestId === msg.requestId && msg.role === 'assistant' && lastMsg.role === 'assistant';
+
+      if (isSameRequest) {
+        if (msg.content) {
+          if (lastMsg.content.startsWith('[Used ') && lastMsg.content.includes('tool(s):')) {
+            lastMsg.content = msg.content;
+          } else {
+            lastMsg.content = `${lastMsg.content}\n${msg.content}`;
+          }
+        }
+        if (msg.toolCalls) {
+          lastMsg.toolCalls = [...(lastMsg.toolCalls || []), ...msg.toolCalls];
+          if (lastMsg.content.startsWith('[Used ') && lastMsg.content.includes('tool(s):')) {
+            lastMsg.content = `[Used ${lastMsg.toolCalls.length} tool(s): ${lastMsg.toolCalls.map(t => t.name).join(', ')}]`;
+          }
+        }
+        if (msg.usage) {
+          lastMsg.usage = msg.usage;
+        }
+      } else {
+        grouped.push({ ...msg });
+      }
+    });
+    return grouped;
+  }, [session?.messages, groupMessages]);
 
   if (isLoading || !session || !session.id) {
     return (
@@ -67,7 +101,6 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
     .slice(0, 10);
 
   const models = [...new Set(session.models || [])];
-  const messages = session.messages || [];
   const compaction = session.compaction || { compactions: 0, microcompactions: 0, totalTokensSaved: 0, compactionTimestamps: [] };
   const compactionCount = compaction.compactions + compaction.microcompactions;
 
@@ -152,14 +185,30 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
         {/* Conversation */}
         <div className="col-span-2">
           <Card className="border-border/50 shadow-sm">
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-sm font-semibold">Conversation</CardTitle>
+              <div className="flex items-center gap-2 px-2 py-1 bg-muted/40 rounded-md border border-border/50">
+                <input 
+                  type="checkbox"
+                  id="group-toggle" 
+                  checked={groupMessages} 
+                  onChange={(e) => setGroupMessages(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-border text-primary focus:ring-primary/20 cursor-pointer"
+                />
+                <label 
+                  htmlFor="group-toggle" 
+                  className="text-[10px] font-medium leading-none flex items-center gap-1 cursor-pointer select-none text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Layers className="h-3 w-3" />
+                  Group by Request
+                </label>
+              </div>
             </CardHeader>
             <CardContent className="pt-0 max-h-[calc(100vh-280px)] overflow-y-auto">
               <div className="space-y-4">
                 {(() => {
                   let lastCacheRead = 0;
-                  return messages.map((msg, i) => {
+                  return displayMessages.map((msg, i) => {
                     const cacheRead = msg.usage?.cache_read_input_tokens || 0;
                     let cacheReadDelta = 0;
                     let showCacheRead = false;
@@ -196,6 +245,16 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                             <span className="text-[10px] text-muted-foreground">
                               {format(new Date(msg.timestamp), 'h:mm:ss a')}
                             </span>
+                            {msg.requestId && (
+                              <span className="text-[9px] text-muted-foreground font-mono bg-muted/30 px-1 rounded" title={`Request ID: ${msg.requestId}`}>
+                                req:{msg.requestId.split('_')[1]?.slice(0, 6) || msg.requestId.slice(0, 6)}
+                              </span>
+                            )}
+                            {msg.messageId && (
+                              <span className="text-[9px] text-muted-foreground font-mono bg-muted/30 px-1 rounded" title={`Message ID: ${msg.messageId}`}>
+                                msg:{msg.messageId.split('_')[1]?.slice(0, 6) || msg.messageId.slice(0, 6)}
+                              </span>
+                            )}
                             {msg.model && (
                               <Badge variant="secondary" className="text-[9px] px-1 py-0">
                                 {msg.model.includes('opus') ? 'Opus' : msg.model.includes('sonnet') ? 'Sonnet' : 'Haiku'}

@@ -74,6 +74,7 @@ export interface SessionMessage {
   sessionId: string;
   timestamp: string;
   uuid: string;
+  requestId?: string;
   parentUuid: string | null;
   cwd: string;
   version: string;
@@ -84,6 +85,7 @@ export interface SessionMessage {
   message?: {
     role: string;
     model?: string;
+    id?: string;
     content: unknown;
     usage?: TokenUsage;
     stop_reason?: string | null;
@@ -164,6 +166,8 @@ export interface SessionMessageDisplay {
   content: string;
   timestamp: string;
   model?: string;
+  requestId?: string;
+  messageId?: string;
   usage?: TokenUsage;
   toolCalls?: { name: string; id: string; input?: unknown }[];
 }
