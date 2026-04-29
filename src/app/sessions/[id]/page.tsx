@@ -103,6 +103,16 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
   const [selectedJson, setSelectedJson] = useState<SessionMessageDisplay | null>(null);
   const [groupMessages, setGroupMessages] = useState(true);
   const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null);
+  const [visibleTokens, setVisibleTokens] = useState({
+    input: true,
+    output: true,
+    cacheRead: true,
+    cacheWrite: true,
+  });
+
+  const toggleToken = (key: keyof typeof visibleTokens) => {
+    setVisibleTokens(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   useEffect(() => {
     if (highlightedIndex !== null) {
@@ -452,7 +462,8 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                     dataKey="input" 
                     stackId="a" 
                     fill={TOKEN_COLORS.input} 
-                    onClick={(data: any) => {
+                    hide={!visibleTokens.input}
+                    onClick={(data: { index: number }) => {
                       const idx = data.index - 1;
                       setHighlightedIndex(idx);
                       const element = document.getElementById(`msg-${idx}`);
@@ -466,7 +477,8 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                     dataKey="output" 
                     stackId="a" 
                     fill={TOKEN_COLORS.output} 
-                    onClick={(data: any) => {
+                    hide={!visibleTokens.output}
+                    onClick={(data: { index: number }) => {
                       const idx = data.index - 1;
                       setHighlightedIndex(idx);
                       const element = document.getElementById(`msg-${idx}`);
@@ -480,7 +492,8 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                     dataKey="cacheRead" 
                     stackId="a" 
                     fill={TOKEN_COLORS.cacheRead} 
-                    onClick={(data: any) => {
+                    hide={!visibleTokens.cacheRead}
+                    onClick={(data: { index: number }) => {
                       const idx = data.index - 1;
                       setHighlightedIndex(idx);
                       const element = document.getElementById(`msg-${idx}`);
@@ -494,7 +507,8 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                     dataKey="cacheWrite" 
                     stackId="a" 
                     fill={TOKEN_COLORS.cacheWrite} 
-                    onClick={(data: any) => {
+                    hide={!visibleTokens.cacheWrite}
+                    onClick={(data: { index: number }) => {
                       const idx = data.index - 1;
                       setHighlightedIndex(idx);
                       const element = document.getElementById(`msg-${idx}`);
@@ -509,23 +523,24 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                     wrapperStyle={{ pointerEvents: 'none' }}
                     content={({ active, payload }) => {
                       if (active && payload && payload.length) {
+                        const data = payload[0].payload as { index: number };
                         return (
                           <div className="rounded-lg border border-border bg-card p-2 shadow-sm text-[10px] pointer-events-none">
-                            <p className="font-bold mb-1">Message {payload[0].payload.index}</p>
+                            <p className="font-bold mb-1">Message {data.index}</p>
                             <div className="space-y-0.5">
-                              {payload.map((entry: any) => (
+                              {payload.map((entry) => (
                                 <div key={entry.name} className="flex items-center justify-between gap-4">
                                   <div className="flex items-center gap-1.5">
                                     <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: entry.color }} />
                                     <span className="text-muted-foreground capitalize">{entry.name}</span>
                                   </div>
-                                  <span className="font-mono font-medium">{formatTokens(entry.value)}</span>
+                                  <span className="font-mono font-medium">{formatTokens(entry.value as number)}</span>
                                 </div>
                               ))}
                               <div className="pt-1 mt-1 border-t border-border flex items-center justify-between gap-4">
                                 <span className="font-bold">Total</span>
                                 <span className="font-mono font-bold">
-                                  {formatTokens(payload.reduce((acc: number, entry: any) => acc + Number(entry.value || 0), 0))}
+                                  {formatTokens(payload.reduce((acc, entry) => acc + Number(entry.value || 0), 0))}
                                 </span>
                               </div>
                             </div>
@@ -542,22 +557,34 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
             <div className="bg-muted/30 border-t border-border/30 px-3 py-1.5 flex items-center justify-between gap-4">
               <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Conversation Token Flow</span>
               <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1">
+                <button 
+                  onClick={() => toggleToken('input')}
+                  className={`flex items-center gap-1.5 hover:opacity-80 transition-all ${!visibleTokens.input ? 'opacity-40 grayscale' : ''}`}
+                >
                   <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: TOKEN_COLORS.input }} />
-                  <span className="text-[9px] text-muted-foreground">In</span>
-                </div>
-                <div className="flex items-center gap-1">
+                  <span className="text-[9px] text-muted-foreground font-medium">In</span>
+                </button>
+                <button 
+                  onClick={() => toggleToken('output')}
+                  className={`flex items-center gap-1.5 hover:opacity-80 transition-all ${!visibleTokens.output ? 'opacity-40 grayscale' : ''}`}
+                >
                   <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: TOKEN_COLORS.output }} />
-                  <span className="text-[9px] text-muted-foreground">Out</span>
-                </div>
-                <div className="flex items-center gap-1">
+                  <span className="text-[9px] text-muted-foreground font-medium">Out</span>
+                </button>
+                <button 
+                  onClick={() => toggleToken('cacheRead')}
+                  className={`flex items-center gap-1.5 hover:opacity-80 transition-all ${!visibleTokens.cacheRead ? 'opacity-40 grayscale' : ''}`}
+                >
                   <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: TOKEN_COLORS.cacheRead }} />
-                  <span className="text-[9px] text-muted-foreground">C.Read</span>
-                </div>
-                <div className="flex items-center gap-1">
+                  <span className="text-[9px] text-muted-foreground font-medium">C.Read</span>
+                </button>
+                <button 
+                  onClick={() => toggleToken('cacheWrite')}
+                  className={`flex items-center gap-1.5 hover:opacity-80 transition-all ${!visibleTokens.cacheWrite ? 'opacity-40 grayscale' : ''}`}
+                >
                   <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: TOKEN_COLORS.cacheWrite }} />
-                  <span className="text-[9px] text-muted-foreground">C.Write</span>
-                </div>
+                  <span className="text-[9px] text-muted-foreground font-medium">C.Write</span>
+                </button>
               </div>
             </div>
           </Card>
