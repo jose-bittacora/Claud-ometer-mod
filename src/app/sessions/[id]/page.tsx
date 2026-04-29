@@ -452,7 +452,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                     dataKey="input" 
                     stackId="a" 
                     fill={TOKEN_COLORS.input} 
-                    onClick={(data) => {
+                    onClick={(data: any) => {
                       const idx = data.index - 1;
                       setHighlightedIndex(idx);
                       const element = document.getElementById(`msg-${idx}`);
@@ -466,7 +466,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                     dataKey="output" 
                     stackId="a" 
                     fill={TOKEN_COLORS.output} 
-                    onClick={(data) => {
+                    onClick={(data: any) => {
                       const idx = data.index - 1;
                       setHighlightedIndex(idx);
                       const element = document.getElementById(`msg-${idx}`);
@@ -480,7 +480,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                     dataKey="cacheRead" 
                     stackId="a" 
                     fill={TOKEN_COLORS.cacheRead} 
-                    onClick={(data) => {
+                    onClick={(data: any) => {
                       const idx = data.index - 1;
                       setHighlightedIndex(idx);
                       const element = document.getElementById(`msg-${idx}`);
@@ -494,7 +494,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                     dataKey="cacheWrite" 
                     stackId="a" 
                     fill={TOKEN_COLORS.cacheWrite} 
-                    onClick={(data) => {
+                    onClick={(data: any) => {
                       const idx = data.index - 1;
                       setHighlightedIndex(idx);
                       const element = document.getElementById(`msg-${idx}`);
@@ -522,6 +522,12 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                                   <span className="font-mono font-medium">{formatTokens(entry.value)}</span>
                                 </div>
                               ))}
+                              <div className="pt-1 mt-1 border-t border-border flex items-center justify-between gap-4">
+                                <span className="font-bold">Total</span>
+                                <span className="font-mono font-bold">
+                                  {formatTokens(payload.reduce((acc: number, entry: any) => acc + Number(entry.value || 0), 0))}
+                                </span>
+                              </div>
                             </div>
                             <p className="mt-2 text-[8px] text-muted-foreground italic">Click to jump to message</p>
                           </div>
