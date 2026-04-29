@@ -20,10 +20,22 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import json from 'react-syntax-highlighter/dist/esm/languages/prism/json';
 import oneDark from 'react-syntax-highlighter/dist/esm/styles/prism/one-dark';
+import { 
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell as BarCell
+} from 'recharts';
 
 SyntaxHighlighter.registerLanguage('json', json);
 
+const TOKEN_COLORS = {
+  input: 'var(--chart-1)',
+  output: 'var(--chart-2)',
+  cacheRead: 'var(--chart-4)',
+  cacheWrite: 'var(--chart-5)',
+};
+
 const customCodeStyle: { [key: string]: React.CSSProperties } = {
+// ... (rest of style)
   'code[class*="language-"]': {
     color: '#abb2bf',
     background: 'none',
@@ -90,53 +102,92 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
   const { pickCost } = useCostMode();
   const [selectedJson, setSelectedJson] = useState<SessionMessageDisplay | null>(null);
   const [groupMessages, setGroupMessages] = useState(true);
+  const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (highlightedIndex !== null) {
+      const timer = setTimeout(() => setHighlightedIndex(null), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [highlightedIndex]);
 
   const displayMessages = useMemo(() => {
     if (!session?.messages) return [];
-    if (!groupMessages) return session.messages;
+    
+    const messages = groupMessages ? (() => {
+      const grouped: (SessionMessageDisplay & { cacheReadDelta?: number; showCacheRead?: boolean })[] = [];
+      let lastCacheRead = 0;
 
-    const grouped: (SessionMessageDisplay & { cacheReadDelta?: number; showCacheRead?: boolean })[] = [];
-    let lastCacheRead = 0;
+      session.messages.forEach((msg) => {
+        const lastMsg = grouped.length > 0 ? grouped[grouped.length - 1] : null;
+        const isSameRequest = lastMsg && msg.requestId && lastMsg.requestId === msg.requestId && msg.role === 'assistant' && lastMsg.role === 'assistant';
 
-    session.messages.forEach((msg) => {
-      const lastMsg = grouped.length > 0 ? grouped[grouped.length - 1] : null;
-      const isSameRequest = lastMsg && msg.requestId && lastMsg.requestId === msg.requestId && msg.role === 'assistant' && lastMsg.role === 'assistant';
+        const cacheRead = msg.usage?.cache_read_input_tokens || 0;
+        let cacheReadDelta = 0;
+        let showCacheRead = false;
 
-      const cacheRead = msg.usage?.cache_read_input_tokens || 0;
-      let cacheReadDelta = 0;
-      let showCacheRead = false;
+        if (cacheRead > 0 && cacheRead > lastCacheRead) {
+          cacheReadDelta = lastCacheRead > 0 ? cacheRead - lastCacheRead : 0;
+          showCacheRead = true;
+          lastCacheRead = cacheRead;
+        }
 
-      if (cacheRead > 0 && cacheRead > lastCacheRead) {
-        cacheReadDelta = lastCacheRead > 0 ? cacheRead - lastCacheRead : 0;
-        showCacheRead = true;
-        lastCacheRead = cacheRead;
-      }
-
-      if (isSameRequest) {
-        if (msg.content) {
-          if (lastMsg.content.startsWith('[Used ') && lastMsg.content.includes('tool(s):')) {
-            lastMsg.content = msg.content;
-          } else {
-            lastMsg.content = `${lastMsg.content}\n${msg.content}`;
+        if (isSameRequest) {
+          if (msg.content) {
+            if (lastMsg.content.startsWith('[Used ') && lastMsg.content.includes('tool(s):')) {
+              lastMsg.content = msg.content;
+            } else {
+              lastMsg.content = `${lastMsg.content}\n${msg.content}`;
+            }
           }
-        }
-        if (msg.toolCalls) {
-          lastMsg.toolCalls = [...(lastMsg.toolCalls || []), ...msg.toolCalls];
-          if (lastMsg.content.startsWith('[Used ') && lastMsg.content.includes('tool(s):')) {
-            lastMsg.content = `[Used ${lastMsg.toolCalls.length} tool(s): ${lastMsg.toolCalls.map(t => t.name).join(', ')}]`;
+          if (msg.toolCalls) {
+            lastMsg.toolCalls = [...(lastMsg.toolCalls || []), ...msg.toolCalls];
+            if (lastMsg.content.startsWith('[Used ') && lastMsg.content.includes('tool(s):')) {
+              lastMsg.content = `[Used ${lastMsg.toolCalls.length} tool(s): ${lastMsg.toolCalls.map(t => t.name).join(', ')}]`;
+            }
           }
+          if (msg.usage) {
+            lastMsg.usage = msg.usage;
+            lastMsg.cacheReadDelta = cacheReadDelta || lastMsg.cacheReadDelta;
+            lastMsg.showCacheRead = showCacheRead || lastMsg.showCacheRead;
+          }
+        } else {
+          grouped.push({ ...msg, cacheReadDelta, showCacheRead });
         }
-        if (msg.usage) {
-          lastMsg.usage = msg.usage;
-          lastMsg.cacheReadDelta = cacheReadDelta || lastMsg.cacheReadDelta;
-          lastMsg.showCacheRead = showCacheRead || lastMsg.showCacheRead;
-        }
-      } else {
-        grouped.push({ ...msg, cacheReadDelta, showCacheRead });
-      }
+      });
+      return grouped;
+    })() : session.messages;
+
+    // Calculate cumulative tokens
+    let runningTotal = 0;
+    return messages.map(msg => {
+      const tokens = msg.usage ? (
+        (msg.usage.input_tokens || 0) + 
+        (msg.usage.output_tokens || 0) + 
+        (msg.usage.cache_read_input_tokens || 0) + 
+        (msg.usage.cache_creation_input_tokens || 0)
+      ) : 0;
+      
+      // If we are NOT grouping, we need to be careful not to double count tokens from the same request
+      // But for simplicity and based on user request "ten en cuenta los mensajes con el mismo id", 
+      // let's assume each entry in 'messages' is a discrete unit of usage to display.
+      // Actually, if NOT grouping, msg.usage in assistant messages of same request might be cumulative.
+      // Let's stick to the grouped logic for running total if possible, or just sum them up.
+      
+      runningTotal += tokens;
+      return { ...msg, cumulativeTokens: runningTotal };
     });
-    return grouped;
   }, [session, groupMessages]);
+
+  const conversationChartData = useMemo(() => {
+    return displayMessages.map((msg, i) => ({
+      index: i + 1,
+      input: msg.usage?.input_tokens || 0,
+      output: msg.usage?.output_tokens || 0,
+      cacheRead: msg.usage?.cache_read_input_tokens || 0,
+      cacheWrite: msg.usage?.cache_creation_input_tokens || 0,
+    }));
+  }, [displayMessages]);
 
   if (isLoading || !session || !session.id) {
     return (
@@ -273,7 +324,15 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                   const cacheWrite = msg.usage?.cache_creation_input_tokens || 0;
 
                     return (
-                      <div key={i} className="flex gap-3">
+                      <div 
+                        key={i} 
+                        id={`msg-${i}`} 
+                        className={`flex gap-3 scroll-mt-6 p-2 rounded-lg transition-all duration-500 ${
+                          highlightedIndex === i 
+                            ? 'bg-primary/5 ring-2 ring-primary shadow-md' 
+                            : 'border-transparent'
+                        }`}
+                      >
                         <div className={`mt-0.5 flex-shrink-0 rounded-lg p-1.5 ${
                           msg.role === 'user' ? 'bg-primary/10' : 'bg-muted'
                         }`}>
@@ -313,7 +372,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                             )}
                             {msg.usage && (
                               <span className="text-[9px] text-muted-foreground">
-                                {formatTokens((msg.usage.input_tokens || 0) + (msg.usage.output_tokens || 0))} tokens
+                                {formatTokens((msg.usage.input_tokens || 0) + (msg.usage.output_tokens || 0) + (msg.usage.cache_read_input_tokens || 0) + (msg.usage.cache_creation_input_tokens || 0))} tokens
                               </span>
                             )}
                             <button
@@ -352,6 +411,17 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                                   <span className="font-semibold">Cache Write:</span> {formatTokens(cacheWrite)}
                                 </div>
                               )}
+                              <div className="flex items-center gap-1 text-muted-foreground">
+                                <span className="font-semibold">Total:</span> {formatTokens(
+                                  (msg.usage.input_tokens || 0) + 
+                                  (msg.usage.output_tokens || 0) + 
+                                  (msg.usage.cache_read_input_tokens || 0) + 
+                                  (msg.usage.cache_creation_input_tokens || 0)
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1 text-muted-foreground ml-auto">
+                                <span className="font-semibold">Cumulative:</span> {formatTokens(msg.cumulativeTokens || 0)}
+                              </div>
                             </div>
                           )}
 
@@ -369,6 +439,122 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
               </div>
             </CardContent>
           </Card>
+
+          {/* Conversation Usage Timeline */}
+          <Card className="mt-4 border-border/50 shadow-sm overflow-hidden">
+            <div className="h-[600px] w-full px-2 pt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart 
+                  data={conversationChartData} 
+                  margin={{ top: 0, right: 0, left: 0, bottom: 2 }}
+                >
+                  <Bar 
+                    dataKey="input" 
+                    stackId="a" 
+                    fill={TOKEN_COLORS.input} 
+                    onClick={(data) => {
+                      const idx = data.index - 1;
+                      setHighlightedIndex(idx);
+                      const element = document.getElementById(`msg-${idx}`);
+                      if (element) {
+                        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  <Bar 
+                    dataKey="output" 
+                    stackId="a" 
+                    fill={TOKEN_COLORS.output} 
+                    onClick={(data) => {
+                      const idx = data.index - 1;
+                      setHighlightedIndex(idx);
+                      const element = document.getElementById(`msg-${idx}`);
+                      if (element) {
+                        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  <Bar 
+                    dataKey="cacheRead" 
+                    stackId="a" 
+                    fill={TOKEN_COLORS.cacheRead} 
+                    onClick={(data) => {
+                      const idx = data.index - 1;
+                      setHighlightedIndex(idx);
+                      const element = document.getElementById(`msg-${idx}`);
+                      if (element) {
+                        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  <Bar 
+                    dataKey="cacheWrite" 
+                    stackId="a" 
+                    fill={TOKEN_COLORS.cacheWrite} 
+                    onClick={(data) => {
+                      const idx = data.index - 1;
+                      setHighlightedIndex(idx);
+                      const element = document.getElementById(`msg-${idx}`);
+                      if (element) {
+                        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  <RechartsTooltip
+                    cursor={{ fill: 'var(--muted)', opacity: 0.4 }}
+                    wrapperStyle={{ pointerEvents: 'none' }}
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="rounded-lg border border-border bg-card p-2 shadow-sm text-[10px] pointer-events-none">
+                            <p className="font-bold mb-1">Message {payload[0].payload.index}</p>
+                            <div className="space-y-0.5">
+                              {payload.map((entry: any) => (
+                                <div key={entry.name} className="flex items-center justify-between gap-4">
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: entry.color }} />
+                                    <span className="text-muted-foreground capitalize">{entry.name}</span>
+                                  </div>
+                                  <span className="font-mono font-medium">{formatTokens(entry.value)}</span>
+                                </div>
+                              ))}
+                            </div>
+                            <p className="mt-2 text-[8px] text-muted-foreground italic">Click to jump to message</p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="bg-muted/30 border-t border-border/30 px-3 py-1.5 flex items-center justify-between gap-4">
+              <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Conversation Token Flow</span>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1">
+                  <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: TOKEN_COLORS.input }} />
+                  <span className="text-[9px] text-muted-foreground">In</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: TOKEN_COLORS.output }} />
+                  <span className="text-[9px] text-muted-foreground">Out</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: TOKEN_COLORS.cacheRead }} />
+                  <span className="text-[9px] text-muted-foreground">C.Read</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: TOKEN_COLORS.cacheWrite }} />
+                  <span className="text-[9px] text-muted-foreground">C.Write</span>
+                </div>
+              </div>
+            </div>
+          </Card>
         </div>
 
         {/* Sidebar info */}
@@ -377,23 +563,76 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold">Token Breakdown</CardTitle>
             </CardHeader>
-            <CardContent className="pt-0 space-y-3">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Input Tokens</span>
-                <span className="font-medium">{formatTokens(session.totalInputTokens)}</span>
+            <CardContent className="pt-0 space-y-4">
+              <div className="h-[140px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={[
+                        { name: 'Input', value: session.totalInputTokens, color: TOKEN_COLORS.input },
+                        { name: 'Output', value: session.totalOutputTokens, color: TOKEN_COLORS.output },
+                        { name: 'Cache Read', value: session.totalCacheReadTokens, color: TOKEN_COLORS.cacheRead },
+                        { name: 'Cache Write', value: session.totalCacheWriteTokens, color: TOKEN_COLORS.cacheWrite },
+                      ].filter(d => d.value > 0)}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={35}
+                      outerRadius={55}
+                      dataKey="value"
+                      strokeWidth={2}
+                      stroke="var(--card)"
+                    >
+                      {[
+                        { name: 'Input', value: session.totalInputTokens, color: TOKEN_COLORS.input },
+                        { name: 'Output', value: session.totalOutputTokens, color: TOKEN_COLORS.output },
+                        { name: 'Cache Read', value: session.totalCacheReadTokens, color: TOKEN_COLORS.cacheRead },
+                        { name: 'Cache Write', value: session.totalCacheWriteTokens, color: TOKEN_COLORS.cacheWrite },
+                      ].filter(d => d.value > 0).map((entry, i) => (
+                        <Cell key={i} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip
+                      formatter={(value) => formatTokens(Number(value))}
+                      contentStyle={{
+                        backgroundColor: 'var(--card)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '8px',
+                        fontSize: '10px',
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Output Tokens</span>
-                <span className="font-medium">{formatTokens(session.totalOutputTokens)}</span>
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Cache Read</span>
-                <span className="font-medium">{formatTokens(session.totalCacheReadTokens)}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Cache Write</span>
-                <span className="font-medium">{formatTokens(session.totalCacheWriteTokens)}</span>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full" style={{ backgroundColor: TOKEN_COLORS.input }} />
+                    <span className="text-muted-foreground">Input Tokens</span>
+                  </div>
+                  <span className="font-medium">{formatTokens(session.totalInputTokens)}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full" style={{ backgroundColor: TOKEN_COLORS.output }} />
+                    <span className="text-muted-foreground">Output Tokens</span>
+                  </div>
+                  <span className="font-medium">{formatTokens(session.totalOutputTokens)}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full" style={{ backgroundColor: TOKEN_COLORS.cacheRead }} />
+                    <span className="text-muted-foreground">Cache Read</span>
+                  </div>
+                  <span className="font-medium">{formatTokens(session.totalCacheReadTokens)}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full" style={{ backgroundColor: TOKEN_COLORS.cacheWrite }} />
+                    <span className="text-muted-foreground">Cache Write</span>
+                  </div>
+                  <span className="font-medium">{formatTokens(session.totalCacheWriteTokens)}</span>
+                </div>
               </div>
             </CardContent>
           </Card>

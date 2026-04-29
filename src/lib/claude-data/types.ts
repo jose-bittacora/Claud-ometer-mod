@@ -170,6 +170,7 @@ export interface SessionMessageDisplay {
   messageId?: string;
   usage?: TokenUsage;
   toolCalls?: { name: string; id: string; input?: unknown }[];
+  cumulativeTokens?: number;
 }
 
 export interface DashboardStats {
