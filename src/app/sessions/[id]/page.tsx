@@ -1,18 +1,18 @@
 'use client';
 
 import { use, useState, useMemo, useEffect } from 'react';
-import useSWR from 'swr';
 import { useSessionDetail } from '@/lib/hooks';
 import { useCostMode } from '@/lib/cost-mode-context';
 import { SessionMessageDisplay } from '@/lib/claude-data/types';
 import { formatCost, formatDuration, formatTokens } from '@/lib/format';
+import { TOKEN_COST_COEFFICIENTS } from '@/config/pricing';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import {
   ArrowLeft, Clock, GitBranch, MessageSquare, Wrench,
   User, Bot, Coins, Activity, Minimize2, ChevronDown, ChevronRight,
-  TrendingUp, Eye, X, Layers
+  TrendingUp, Eye, X, Layers, Scale
 } from 'lucide-react';
 import Link from 'next/link';
 import { format } from 'date-fns';
@@ -22,7 +22,7 @@ import json from 'react-syntax-highlighter/dist/esm/languages/prism/json';
 import oneDark from 'react-syntax-highlighter/dist/esm/styles/prism/one-dark';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell as BarCell
+  BarChart, Bar
 } from 'recharts';
 
 SyntaxHighlighter.registerLanguage('json', json);
@@ -102,6 +102,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
   const { pickCost } = useCostMode();
   const [selectedJson, setSelectedJson] = useState<SessionMessageDisplay | null>(null);
   const [groupMessages, setGroupMessages] = useState(true);
+  const [scaleByCost, setScaleByCost] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null);
   const [visibleTokens, setVisibleTokens] = useState({
     input: true,
@@ -190,14 +191,35 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
   }, [session, groupMessages]);
 
   const conversationChartData = useMemo(() => {
-    return displayMessages.map((msg, i) => ({
-      index: i + 1,
-      input: msg.usage?.input_tokens || 0,
-      output: msg.usage?.output_tokens || 0,
-      cacheRead: msg.usage?.cache_read_input_tokens || 0,
-      cacheWrite: msg.usage?.cache_creation_input_tokens || 0,
-    }));
-  }, [displayMessages]);
+    return displayMessages.map((msg, i) => {
+      const input = msg.usage?.input_tokens || 0;
+      const output = msg.usage?.output_tokens || 0;
+      const cacheRead = msg.usage?.cache_read_input_tokens || 0;
+      const cacheWrite = msg.usage?.cache_creation_input_tokens || 0;
+
+      if (scaleByCost) {
+        return {
+          index: i + 1,
+          input: input * TOKEN_COST_COEFFICIENTS.input,
+          output: output * TOKEN_COST_COEFFICIENTS.output,
+          cacheRead: cacheRead * TOKEN_COST_COEFFICIENTS.cacheRead,
+          cacheWrite: cacheWrite * TOKEN_COST_COEFFICIENTS.cacheWrite,
+          rawInput: input,
+          rawOutput: output,
+          rawCacheRead: cacheRead,
+          rawCacheWrite: cacheWrite,
+        };
+      }
+
+      return {
+        index: i + 1,
+        input,
+        output,
+        cacheRead,
+        cacheWrite,
+      };
+    });
+  }, [displayMessages, scaleByCost]);
 
   if (isLoading || !session || !session.id) {
     return (
@@ -523,24 +545,52 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                     wrapperStyle={{ pointerEvents: 'none' }}
                     content={({ active, payload }) => {
                       if (active && payload && payload.length) {
-                        const data = payload[0].payload as { index: number };
+                        const data = payload[0].payload as { 
+                          index: number; 
+                          rawInput?: number; 
+                          rawOutput?: number; 
+                          rawCacheRead?: number; 
+                          rawCacheWrite?: number;
+                          input: number;
+                          output: number;
+                          cacheRead: number;
+                          cacheWrite: number;
+                        };
+                        
+                        const getTotal = () => {
+                          if (scaleByCost) {
+                            return (data.rawInput || 0) + (data.rawOutput || 0) + (data.rawCacheRead || 0) + (data.rawCacheWrite || 0);
+                          }
+                          return payload.reduce((acc, entry) => acc + Number(entry.value || 0), 0);
+                        };
+
                         return (
                           <div className="rounded-lg border border-border bg-card p-2 shadow-sm text-[10px] pointer-events-none">
-                            <p className="font-bold mb-1">Message {data.index}</p>
+                            <p className="font-bold mb-1">Message {data.index} {scaleByCost && <span className="text-[8px] font-normal text-muted-foreground ml-1">(Cost Scaled)</span>}</p>
                             <div className="space-y-0.5">
-                              {payload.map((entry) => (
-                                <div key={entry.name} className="flex items-center justify-between gap-4">
-                                  <div className="flex items-center gap-1.5">
-                                    <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: entry.color }} />
-                                    <span className="text-muted-foreground capitalize">{entry.name}</span>
+                              {payload.map((entry) => {
+                                let displayValue = entry.value as number;
+                                if (scaleByCost) {
+                                  if (entry.dataKey === 'input') displayValue = data.rawInput || 0;
+                                  if (entry.dataKey === 'output') displayValue = data.rawOutput || 0;
+                                  if (entry.dataKey === 'cacheRead') displayValue = data.rawCacheRead || 0;
+                                  if (entry.dataKey === 'cacheWrite') displayValue = data.rawCacheWrite || 0;
+                                }
+                                
+                                return (
+                                  <div key={entry.name} className="flex items-center justify-between gap-4">
+                                    <div className="flex items-center gap-1.5">
+                                      <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: entry.color }} />
+                                      <span className="text-muted-foreground capitalize">{entry.name}</span>
+                                    </div>
+                                    <span className="font-mono font-medium">{formatTokens(displayValue)}</span>
                                   </div>
-                                  <span className="font-mono font-medium">{formatTokens(entry.value as number)}</span>
-                                </div>
-                              ))}
+                                );
+                              })}
                               <div className="pt-1 mt-1 border-t border-border flex items-center justify-between gap-4">
                                 <span className="font-bold">Total</span>
                                 <span className="font-mono font-bold">
-                                  {formatTokens(payload.reduce((acc, entry) => acc + Number(entry.value || 0), 0))}
+                                  {formatTokens(getTotal())}
                                 </span>
                               </div>
                             </div>
@@ -555,7 +605,21 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
               </ResponsiveContainer>
             </div>
             <div className="bg-muted/30 border-t border-border/30 px-3 py-1.5 flex items-center justify-between gap-4">
-              <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Conversation Token Flow</span>
+              <div className="flex items-center gap-4">
+                <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Conversation Token Flow</span>
+                <button
+                  onClick={() => setScaleByCost(!scaleByCost)}
+                  className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md border transition-all ${
+                    scaleByCost 
+                      ? 'bg-primary/10 border-primary/30 text-primary shadow-sm' 
+                      : 'bg-background border-border text-muted-foreground hover:border-border/80'
+                  }`}
+                  title={scaleByCost ? "Scaling by relative cost" : "Scaling by token count"}
+                >
+                  <Scale className="h-3 w-3" />
+                  <span className="text-[9px] font-bold">Cost Scale</span>
+                </button>
+              </div>
               <div className="flex items-center gap-3">
                 <button 
                   onClick={() => toggleToken('input')}
@@ -593,8 +657,19 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
         {/* Sidebar info */}
         <div className="space-y-4">
           <Card className="border-border/50 shadow-sm">
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-sm font-semibold">Token Breakdown</CardTitle>
+              <button
+                onClick={() => setScaleByCost(!scaleByCost)}
+                className={`flex items-center gap-1 p-1 rounded-md border transition-all ${
+                  scaleByCost 
+                    ? 'bg-primary/10 border-primary/30 text-primary' 
+                    : 'bg-background border-border text-muted-foreground hover:border-border/80'
+                }`}
+                title="Toggle Cost Scaling"
+              >
+                <Scale className="h-3 w-3" />
+              </button>
             </CardHeader>
             <CardContent className="pt-0 space-y-4">
               <div className="h-[140px] w-full">
@@ -602,11 +677,11 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                   <PieChart>
                     <Pie
                       data={[
-                        { name: 'Input', value: session.totalInputTokens, color: TOKEN_COLORS.input },
-                        { name: 'Output', value: session.totalOutputTokens, color: TOKEN_COLORS.output },
-                        { name: 'Cache Read', value: session.totalCacheReadTokens, color: TOKEN_COLORS.cacheRead },
-                        { name: 'Cache Write', value: session.totalCacheWriteTokens, color: TOKEN_COLORS.cacheWrite },
-                      ].filter(d => d.value > 0)}
+                        { name: 'Input', value: session.totalInputTokens * (scaleByCost ? TOKEN_COST_COEFFICIENTS.input : 1), rawValue: session.totalInputTokens, color: TOKEN_COLORS.input },
+                        { name: 'Output', value: session.totalOutputTokens * (scaleByCost ? TOKEN_COST_COEFFICIENTS.output : 1), rawValue: session.totalOutputTokens, color: TOKEN_COLORS.output },
+                        { name: 'Cache Read', value: session.totalCacheReadTokens * (scaleByCost ? TOKEN_COST_COEFFICIENTS.cacheRead : 1), rawValue: session.totalCacheReadTokens, color: TOKEN_COLORS.cacheRead },
+                        { name: 'Cache Write', value: session.totalCacheWriteTokens * (scaleByCost ? TOKEN_COST_COEFFICIENTS.cacheWrite : 1), rawValue: session.totalCacheWriteTokens, color: TOKEN_COLORS.cacheWrite },
+                      ].filter(d => d.rawValue > 0)}
                       cx="50%"
                       cy="50%"
                       innerRadius={35}
@@ -616,16 +691,22 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                       stroke="var(--card)"
                     >
                       {[
-                        { name: 'Input', value: session.totalInputTokens, color: TOKEN_COLORS.input },
-                        { name: 'Output', value: session.totalOutputTokens, color: TOKEN_COLORS.output },
-                        { name: 'Cache Read', value: session.totalCacheReadTokens, color: TOKEN_COLORS.cacheRead },
-                        { name: 'Cache Write', value: session.totalCacheWriteTokens, color: TOKEN_COLORS.cacheWrite },
-                      ].filter(d => d.value > 0).map((entry, i) => (
+                        { name: 'Input', rawValue: session.totalInputTokens, color: TOKEN_COLORS.input },
+                        { name: 'Output', rawValue: session.totalOutputTokens, color: TOKEN_COLORS.output },
+                        { name: 'Cache Read', rawValue: session.totalCacheReadTokens, color: TOKEN_COLORS.cacheRead },
+                        { name: 'Cache Write', rawValue: session.totalCacheWriteTokens, color: TOKEN_COLORS.cacheWrite },
+                      ].filter(d => d.rawValue > 0).map((entry, i) => (
                         <Cell key={i} fill={entry.color} />
                       ))}
                     </Pie>
                     <RechartsTooltip
-                      formatter={(value) => formatTokens(Number(value))}
+                      formatter={(value, name, props) => {
+                        const rawValue = props.payload.rawValue;
+                        return [
+                          scaleByCost ? `${formatTokens(rawValue)} (Scaled)` : formatTokens(rawValue),
+                          name
+                        ];
+                      }}
                       contentStyle={{
                         backgroundColor: 'var(--card)',
                         border: '1px solid var(--border)',

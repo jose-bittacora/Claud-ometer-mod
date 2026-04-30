@@ -70,6 +70,27 @@ export function getModelColor(modelId: string): string {
   return '#888888';
 }
 
+/**
+ * Average token cost coefficients relative to input tokens.
+ * Used for scaling charts by cost.
+ */
+export const TOKEN_COST_COEFFICIENTS = (() => {
+  const entries = Object.values(MODEL_PRICING);
+  if (entries.length === 0) return { input: 1, output: 5, cacheWrite: 1.25, cacheRead: 0.1 };
+
+  const avgInput = entries.reduce((acc, p) => acc + p.inputPerMillion, 0) / entries.length;
+  const avgOutput = entries.reduce((acc, p) => acc + p.outputPerMillion, 0) / entries.length;
+  const avgCacheWrite = entries.reduce((acc, p) => acc + p.cacheWritePerMillion, 0) / entries.length;
+  const avgCacheRead = entries.reduce((acc, p) => acc + p.cacheReadPerMillion, 0) / entries.length;
+
+  return {
+    input: 1, // Normalized to input
+    output: avgOutput / avgInput,
+    cacheWrite: avgCacheWrite / avgInput,
+    cacheRead: avgCacheRead / avgInput,
+  };
+})();
+
 export function calculateCost(
   model: string,
   inputTokens: number,
