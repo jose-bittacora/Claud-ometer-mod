@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { DailyActivity } from '@/lib/claude-data/types';
-import { format, parseISO, subWeeks, startOfWeek, addDays, isSameDay } from 'date-fns';
+import { format, subWeeks, startOfWeek, addDays } from 'date-fns';
 
 interface ActivityHeatmapProps {
   data: DailyActivity[];

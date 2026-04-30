@@ -41,10 +41,13 @@ export function PeakHours({ data }: PeakHoursProps) {
               <Tooltip
                 contentStyle={{
                   backgroundColor: 'var(--card)',
+                  color: 'var(--card-foreground)',
                   border: '1px solid var(--border)',
                   borderRadius: '8px',
                   fontSize: '12px',
                 }}
+                itemStyle={{ color: 'var(--card-foreground)' }}
+                labelStyle={{ color: 'var(--card-foreground)' }}
               />
               <Bar
                 dataKey="count"

@@ -27,7 +27,7 @@ export async function PUT(request: Request) {
     }
     setDataSource(source);
     return NextResponse.json({ active: source });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to switch data source' }, { status: 500 });
   }
 }

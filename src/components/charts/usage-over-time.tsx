@@ -77,10 +77,13 @@ export function UsageOverTime({ data }: UsageOverTimeProps) {
               <Tooltip
                 contentStyle={{
                   backgroundColor: 'var(--card)',
+                  color: 'var(--card-foreground)',
                   border: '1px solid var(--border)',
                   borderRadius: '8px',
                   fontSize: '12px',
                 }}
+                itemStyle={{ color: 'var(--card-foreground)' }}
+                labelStyle={{ color: 'var(--card-foreground)' }}
               />
               <Area
                 type="monotone"

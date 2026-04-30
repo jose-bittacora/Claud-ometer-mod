@@ -485,7 +485,8 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                     stackId="a" 
                     fill={TOKEN_COLORS.input} 
                     hide={!visibleTokens.input}
-                    onClick={(data: { index: number }) => {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    onClick={(data: any) => {
                       const idx = data.index - 1;
                       setHighlightedIndex(idx);
                       const element = document.getElementById(`msg-${idx}`);
@@ -500,7 +501,8 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                     stackId="a" 
                     fill={TOKEN_COLORS.output} 
                     hide={!visibleTokens.output}
-                    onClick={(data: { index: number }) => {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    onClick={(data: any) => {
                       const idx = data.index - 1;
                       setHighlightedIndex(idx);
                       const element = document.getElementById(`msg-${idx}`);
@@ -515,7 +517,8 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                     stackId="a" 
                     fill={TOKEN_COLORS.cacheRead} 
                     hide={!visibleTokens.cacheRead}
-                    onClick={(data: { index: number }) => {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    onClick={(data: any) => {
                       const idx = data.index - 1;
                       setHighlightedIndex(idx);
                       const element = document.getElementById(`msg-${idx}`);
@@ -530,7 +533,8 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                     stackId="a" 
                     fill={TOKEN_COLORS.cacheWrite} 
                     hide={!visibleTokens.cacheWrite}
-                    onClick={(data: { index: number }) => {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    onClick={(data: any) => {
                       const idx = data.index - 1;
                       setHighlightedIndex(idx);
                       const element = document.getElementById(`msg-${idx}`);
@@ -565,7 +569,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                         };
 
                         return (
-                          <div className="rounded-lg border border-border bg-card p-2 shadow-sm text-[10px] pointer-events-none">
+                          <div className="rounded-lg border border-border bg-card p-2 shadow-sm text-[10px] pointer-events-none text-card-foreground">
                             <p className="font-bold mb-1">Message {data.index} {scaleByCost && <span className="text-[8px] font-normal text-muted-foreground ml-1">(Cost Scaled)</span>}</p>
                             <div className="space-y-0.5">
                               {payload.map((entry) => {
@@ -709,10 +713,13 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                       }}
                       contentStyle={{
                         backgroundColor: 'var(--card)',
+                        color: 'var(--card-foreground)',
                         border: '1px solid var(--border)',
                         borderRadius: '8px',
                         fontSize: '10px',
                       }}
+                      itemStyle={{ color: 'var(--card-foreground)' }}
+                      labelStyle={{ color: 'var(--card-foreground)' }}
                     />
                   </PieChart>
                 </ResponsiveContainer>

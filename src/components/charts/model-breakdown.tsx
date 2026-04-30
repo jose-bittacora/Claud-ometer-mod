@@ -61,10 +61,13 @@ export function ModelBreakdown({ data }: ModelBreakdownProps) {
                   formatter={(value) => formatTokens(Number(value))}
                   contentStyle={{
                     backgroundColor: 'var(--card)',
+                    color: 'var(--card-foreground)',
                     border: '1px solid var(--border)',
                     borderRadius: '8px',
                     fontSize: '12px',
                   }}
+                  itemStyle={{ color: 'var(--card-foreground)' }}
+                  labelStyle={{ color: 'var(--card-foreground)' }}
                 />
               </PieChart>
             </ResponsiveContainer>

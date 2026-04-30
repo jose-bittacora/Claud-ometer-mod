@@ -309,7 +309,7 @@ function generateHistory(allSessions) {
         display: pick(USER_PROMPTS),
         pastedContents: {},
         timestamp: s.baseDate.getTime() + rand(0, 60000),
-        project: PROJECTS.find(p => true)?.fullPath || '',
+        project: PROJECTS[0]?.fullPath || '',
       }));
     }
   }

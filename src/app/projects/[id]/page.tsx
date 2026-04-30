@@ -3,7 +3,7 @@
 import { use } from 'react';
 import { useProjectSessions } from '@/lib/hooks';
 import { useCostMode } from '@/lib/cost-mode-context';
-import { formatTokens, formatCost, formatDuration, timeAgo } from '@/lib/format';
+import { formatCost, formatDuration, timeAgo } from '@/lib/format';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Clock, GitBranch, MessageSquare, Wrench } from 'lucide-react';

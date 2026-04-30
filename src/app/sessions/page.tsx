@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useSessions } from '@/lib/hooks';
 import { useCostMode } from '@/lib/cost-mode-context';
 import { formatCost, formatDuration, timeAgo, formatTokens } from '@/lib/format';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Clock, GitBranch, MessageSquare, FolderKanban, Minimize2, Search, X } from 'lucide-react';
 import Link from 'next/link';

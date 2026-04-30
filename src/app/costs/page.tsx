@@ -165,10 +165,13 @@ export default function CostsPage() {
                   <Tooltip
                     contentStyle={{
                       backgroundColor: 'var(--card)',
+                      color: 'var(--card-foreground)',
                       border: '1px solid var(--border)',
                       borderRadius: '8px',
                       fontSize: '12px',
                     }}
+                    itemStyle={{ color: 'var(--card-foreground)' }}
+                    labelStyle={{ color: 'var(--card-foreground)' }}
                     formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Est. Cost']}
                   />
                   <Bar dataKey="cost" fill="var(--primary)" radius={[0, 4, 4, 0]} />
